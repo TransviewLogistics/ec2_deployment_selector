@@ -31,7 +31,7 @@ module Ec2DeploymentSelector
       render_table(selected_instances, title, include_num_column: false)
 
       puts "\u{2705} Press Y to confirm, or any other key to reselect:"
-      confirm = STDIN.gets
+      confirm = ENV["NON_INTERACTIVE"] == "true" ? "y" : STDIN.gets
 
       if confirm.strip.downcase != "y"
         self.selected_instances = []
@@ -44,7 +44,7 @@ module Ec2DeploymentSelector
     def prompt_select_instances
       puts "\u{1F680} Select instances by Num to deploy to (comma separated), or enter for all deployable instances:"
 
-      selected_instance_numbers_input = STDIN.gets
+      selected_instance_numbers_input = ENV["NON_INTERACTIVE"] == "true" ? "" : STDIN.gets
 
       selected_instance_numbers = if selected_instance_numbers_input.strip == ""
         instances.select(&:deployable?).map(&:number)
