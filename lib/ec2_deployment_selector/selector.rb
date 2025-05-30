@@ -67,7 +67,7 @@ module Ec2DeploymentSelector
         row(instance, include_num_column)
       end
 
-      headings = ["Name", "Instance Status", "Layers", "Public IP", "Private IP", "Region"].map { |h| h.colorize(mode: :bold) }
+      headings = ["Name", "Instance Status", "Layers", "Public IP", "Private IP", "Region", "Deployable"].map { |h| h.colorize(mode: :bold) }
       headings = ["Num"] + headings if include_num_column
       table = Terminal::Table.new(
         title: title,
@@ -85,7 +85,8 @@ module Ec2DeploymentSelector
         instance.layers,
         instance.public_ip_address,
         instance.private_ip_address,
-        instance.region
+        instance.region,
+        instance.deployable? ? "Yes" : "No",
       ]
       if include_num_column
         number = instance.deployable? ? instance.number : "-"
