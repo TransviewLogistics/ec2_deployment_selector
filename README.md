@@ -27,9 +27,7 @@ Or install it yourself as:
 
 ## Usage
 
-### Basic Usage with Capistrano
-
-In your `config/deploy.rb` file, require the gem and initialize the selector:
+### Basic Setup
 
 ```ruby
 require "ec2_deployment_selector"
@@ -39,74 +37,57 @@ configure_ec2_selector = ->(env) do
     access_key_id: ENV["ACCESS_KEY_ID"],
     secret_access_key: ENV["SECRET_ACCESS_KEY"],
     application_name: fetch(:application),
-    filters: {
-      "ENV_Type" => env
-    }
+    filters: { "ENV_Type" => env }
   )
 
   ec2_deployment_selector.render_all_instances
 
-  # Interactive instance selection
-  ec2_deployment_selector.prompt_select_instances
-  ec2_deployment_selector.confirm_selected_instances
+  if ENV["NON_INTERACTIVE"] == "true"
+    if ENV["TARGET_IPS"] && !ENV["TARGET_IPS"].empty?
+      target_ips = ENV["TARGET_IPS"].split(",").map(&:strip)
+      all_instances = ec2_deployment_selector.instances || []
+      ip_matching_instances = all_instances.select { |instance|
+        target_ips.include?(instance.public_ip_address) || target_ips.include?(instance.private_ip_address)
+      }
+      selected_instances = ip_matching_instances.select(&:deployable?)
+      ec2_deployment_selector.selected_instances = selected_instances
+    else
+      deployable_instances = ec2_deployment_selector.instances.select(&:deployable?)
+      ec2_deployment_selector.selected_instances = deployable_instances
+    end
+  else
+    ec2_deployment_selector.prompt_select_instances
+    ec2_deployment_selector.confirm_selected_instances
+  end
 
-  # Configure servers for deployment
-  ec2_deployment_selector.selected_instances_public_ips.each do |instance_ip|
-    server instance_ip,
-      user: "deploy",
-      roles: %w{app},
-      ssh_options: { forward_agent: true }
+  ec2_deployment_selector.selected_instances.each do |instance|
+    server instance.public_ip_address, user: "deploy", roles: %w{app}
   end
 end
 
-# Call the configurator for each environment
 configure_ec2_selector.call('production') if fetch(:stage) == :production
 configure_ec2_selector.call('staging') if fetch(:stage) == :staging
 ```
 
-### Using with Target IP Filtering
+### Target IP Filtering
 
-You can specify target IPs through environment variables:
+Deploy to specific instances by IP:
 
-```ruby
-if ENV["TARGET_IPS"] && !ENV["TARGET_IPS"].empty?
-  target_ips = ENV["TARGET_IPS"].split(',').map(&:strip)
-
-  all_instances = ec2_deployment_selector.instance_variable_get(:@all_instances) || []
-  selected_instances = all_instances.select do |instance|
-    public_ip = instance.public_ip_address
-    private_ip = instance.private_ip_address
-
-    target_ips.include?(public_ip) || target_ips.include?(private_ip)
-  end
-
-  ec2_deployment_selector.instance_variable_set(:@selected_instances, selected_instances)
-end
+```bash
+NON_INTERACTIVE=true TARGET_IPS="123.123.123.123,192.168.123.123" bundle exec cap staging deploy
 ```
 
 ### Non-Interactive Mode
 
-For CI/CD pipelines, set the `NON_INTERACTIVE` environment variable:
+For CI/CD pipelines:
 
 ```bash
 NON_INTERACTIVE=true bundle exec cap production deploy
 ```
 
-### SSH Options with a Jump Box
+## Instance Deployability
 
-When working with instances behind a bastion host:
-
-```ruby
-ssh_options = {}
-unless ENV["HOPPER_SSH_PROXY"] == "false"
-  ssh_options = {
-    forward_agent: true,
-    proxy: Net::SSH::Proxy::Command.new("ssh hopper -W %h:%p"),
-  }
-end
-
-# Apply these options when configuring servers
-```
+Instances must be "running" and not have a "Deployable" tag set to "false".
 
 ## Development
 
