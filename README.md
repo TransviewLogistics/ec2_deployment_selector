@@ -1,8 +1,13 @@
 # Ec2DeploymentSelector
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/ec2_deployment_selector`. To experiment with that code, run `bin/console` for an interactive prompt.
+EC2 Deployment Selector is a Ruby gem that simplifies the process of selecting Amazon EC2 instances for deployment. It provides an interactive interface for filtering and selecting instances based on tags, regions, and application names. It's particularly useful when integrated with Capistrano for deployment automation.
 
-TODO: Delete this and the text above, and describe your gem
+This gem allows you to:
+- Fetch EC2 instances across multiple AWS regions
+- Filter instances by application name and custom tags
+- Present instances in a formatted table with color-coded status information
+- Interactively select instances for deployment
+- Support non-interactive mode for CI/CD pipelines
 
 ## Installation
 
@@ -22,7 +27,67 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+### Basic Setup
+
+```ruby
+require "ec2_deployment_selector"
+
+configure_ec2_selector = ->(env) do
+  ec2_deployment_selector = Ec2DeploymentSelector::Selector.new(
+    access_key_id: ENV["ACCESS_KEY_ID"],
+    secret_access_key: ENV["SECRET_ACCESS_KEY"],
+    application_name: fetch(:application),
+    filters: { "ENV_Type" => env }
+  )
+
+  ec2_deployment_selector.render_all_instances
+
+  if ENV["NON_INTERACTIVE"] == "true"
+    if ENV["TARGET_IPS"] && !ENV["TARGET_IPS"].empty?
+      target_ips = ENV["TARGET_IPS"].split(",").map(&:strip)
+      all_instances = ec2_deployment_selector.instances || []
+      ip_matching_instances = all_instances.select { |instance|
+        target_ips.include?(instance.public_ip_address) || target_ips.include?(instance.private_ip_address)
+      }
+      selected_instances = ip_matching_instances.select(&:deployable?)
+      ec2_deployment_selector.selected_instances = selected_instances
+    else
+      deployable_instances = ec2_deployment_selector.instances.select(&:deployable?)
+      ec2_deployment_selector.selected_instances = deployable_instances
+    end
+  else
+    ec2_deployment_selector.prompt_select_instances
+    ec2_deployment_selector.confirm_selected_instances
+  end
+
+  ec2_deployment_selector.selected_instances.each do |instance|
+    server instance.public_ip_address, user: "deploy", roles: %w{app}
+  end
+end
+
+configure_ec2_selector.call('production') if fetch(:stage) == :production
+configure_ec2_selector.call('staging') if fetch(:stage) == :staging
+```
+
+### Target IP Filtering
+
+Deploy to specific instances by IP:
+
+```bash
+NON_INTERACTIVE=true TARGET_IPS="123.123.123.123,192.168.123.123" bundle exec cap staging deploy
+```
+
+### Non-Interactive Mode
+
+For CI/CD pipelines:
+
+```bash
+NON_INTERACTIVE=true bundle exec cap production deploy
+```
+
+## Instance Deployability
+
+Instances must be "running" and not have a "Deployable" tag set to "false".
 
 ## Development
 

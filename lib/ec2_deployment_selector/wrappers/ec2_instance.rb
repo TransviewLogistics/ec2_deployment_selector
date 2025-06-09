@@ -10,6 +10,7 @@ module Ec2DeploymentSelector
       CHEF_STATUS_TAG_KEY = "ChefStatus"
       NAME_TAG_KEY = "Name"
       LAYERS_TAG_KEY = "Layers"
+      DEPLOYABLE_TAG_KEY = "Deployable"
 
       attr_accessor :number, :object
 
@@ -21,13 +22,20 @@ module Ec2DeploymentSelector
         object.public_ip_address
       end
 
+      def private_ip_address
+        object.private_ip_address
+      end
+
       def instance_type
         object.instance_type
       end
 
       def deployable?
-        # TODO: include chef status
-        object.state.name == "running"
+        is_running = object.state.name == "running"
+        deployable_tag = tag_value(DEPLOYABLE_TAG_KEY)
+        is_deployable = deployable_tag.nil? || deployable_tag.empty? || deployable_tag.downcase != "false"
+
+        is_running && is_deployable
       end
 
       def name
