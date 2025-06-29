@@ -10,13 +10,16 @@ module Ec2DeploymentSelector
     DEFAULT_REGIONS = ["us-west-2", "us-east-2"]
 
     attr_accessor :selected_instances, :instances
+    attr_reader :deployment_metadata
 
-    def initialize(access_key_id:, secret_access_key:, application_name:, regions: DEFAULT_REGIONS, filters: {})
+    def initialize(access_key_id:, secret_access_key:, application_name:, regions: DEFAULT_REGIONS, filters: {}, track_metadata: false)
       self.access_key_id = access_key_id
       self.secret_access_key = secret_access_key
       self.application_name = application_name
       self.regions = regions
       self.filters = filters
+      @track_metadata = track_metadata
+      @deployment_metadata = {} if @track_metadata
 
       self.instances = fetch_relevant_wrapped_instances
     end
@@ -57,6 +60,51 @@ module Ec2DeploymentSelector
 
     def selected_instances_public_ips
       selected_instances.map(&:public_ip_address)
+    end
+
+    def collect_deployment_metadata
+      return nil unless @track_metadata
+
+      update_deployment_metadata
+      @deployment_metadata
+    end
+
+    def deployment_data_for_notifications
+      return {} unless @track_metadata && @deployment_metadata
+
+      {
+        application: @deployment_metadata[:application],
+        environment: @deployment_metadata[:environment],
+        servers: @deployment_metadata[:servers],
+        target_ips: @deployment_metadata[:target_ips],
+        timestamp: @deployment_metadata[:timestamp],
+        regions: @deployment_metadata[:regions],
+        instance_count: @deployment_metadata[:instance_count]
+      }
+    end
+
+    def send_slack_notification(notifier_or_options = {})
+      unless metadata_collected?
+        puts "⚠️  Cannot send notification: metadata tracking not enabled"
+        return false
+      end
+
+      notifier = case notifier_or_options
+      when Hash
+        SlackNotifier.new(**notifier_or_options)
+      else
+        notifier_or_options
+      end
+
+      if notifier.respond_to?(:send_deployment_notification)
+        notifier.send_deployment_notification(deployment_data_for_notifications)
+      else
+        puts "⚠️  Invalid notifier object provided"
+        false
+      end
+    rescue NameError
+      puts "⚠️  SlackNotifier not available. Make sure to require the notification module."
+      false
     end
 
     private
@@ -113,6 +161,46 @@ module Ec2DeploymentSelector
       end
 
       self.selected_instances = valid_selected_instances
+      update_deployment_metadata if @track_metadata
+    end
+
+    def update_deployment_metadata
+      return unless @track_metadata
+
+      @deployment_metadata.merge!({
+        application: application_name,
+        environment: detect_environment,
+        servers: format_servers_for_metadata,
+        target_ips: selected_instances_public_ips.join(","),
+        timestamp: Time.now.strftime("%Y-%m-%d %H:%M:%S UTC"),
+        regions: selected_instances.map(&:region).uniq.sort,
+        instance_count: selected_instances.length,
+        filters_applied: filters
+      })
+    end
+
+    def detect_environment
+      env_indicators = ['ENV_Type', 'Environment', 'env', 'stage']
+
+      env_indicators.each do |indicator|
+        env_value = filters[indicator]
+        return env_value if env_value
+      end
+
+      "unknown"
+    end
+
+    def format_servers_for_metadata
+      selected_instances.map do |instance|
+        {
+          name: instance.name,
+          public_ip: instance.public_ip_address,
+          private_ip: instance.private_ip_address,
+          region: instance.region,
+          instance_id: instance.instance_id,
+          layers: instance.layers
+        }
+      end
     end
 
     def fetch_relevant_wrapped_instances

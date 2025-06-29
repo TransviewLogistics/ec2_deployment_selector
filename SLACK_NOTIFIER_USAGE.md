@@ -222,3 +222,64 @@ The SlackNotifier is designed for atomic operation:
 - ✅ **Robust**: Retry logic, validation, and error handling
 - ✅ **Testable**: Built-in validation and testing methods
 - ✅ **Flexible**: Custom messages and deployment notifications
+
+## Integration with EC2 Selector Metadata
+
+```ruby
+# Use Selector with metadata collection
+selector = Ec2DeploymentSelector::Selector.new(
+  access_key_id: ENV["ACCESS_KEY_ID"],
+  secret_access_key: ENV["SECRET_ACCESS_KEY"],
+  application_name: "my-app",
+  filters: { "ENV_Type" => "production" },
+  track_metadata: true  # Enable metadata collection
+)
+
+# Perform selection
+selector.render_all_instances
+selector.prompt_select_instances
+selector.confirm_selected_instances
+
+# Get deployment data for notifications
+deployment_data = selector.deployment_data_for_notifications
+
+# Send notification with collected server data
+notifier = Ec2DeploymentSelector::SlackNotifier.new(
+  webhook_url: ENV["SLACK_WEBHOOK_URL"],
+  stage: "production"
+)
+
+notifier.send_deployment_notification(deployment_data)
+```
+
+### Direct Integration (Convenience Method)
+
+```ruby
+# Shorthand: send notification directly from selector
+selector = Ec2DeploymentSelector::Selector.new(
+  access_key_id: ENV["ACCESS_KEY_ID"],
+  secret_access_key: ENV["SECRET_ACCESS_KEY"],
+  application_name: "my-app",
+  filters: { "ENV_Type" => "production" },
+  track_metadata: true
+)
+
+selector.render_all_instances
+selector.prompt_select_instances
+selector.confirm_selected_instances
+
+# Option 1: Pass notifier options
+selector.send_slack_notification(
+  webhook_url: ENV["SLACK_WEBHOOK_URL"],
+  stage: "production"
+)
+
+# Option 2: Pass configured notifier instance
+notifier = Ec2DeploymentSelector::SlackNotifier.new(
+  config_file_path: "config/slack.yml",
+  stage: "production"
+)
+selector.send_slack_notification(notifier)
+```
+
+## Usage with Configuration File
