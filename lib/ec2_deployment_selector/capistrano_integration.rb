@@ -133,11 +133,7 @@ module Ec2DeploymentSelector
           send_deployment_notification
         end
       end
-
-      task :slack_notify => :notify_slack
     end
-
-    alias_method :define_slack_notification_task, :define_slack_notification_tasks
 
     private
 
@@ -219,8 +215,4 @@ module Ec2DeploymentSelector
       fields
     end
   end
-end
-
-if defined?(Capistrano::DSL)
-  extend Ec2DeploymentSelector::CapistranoIntegration
 end

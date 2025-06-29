@@ -75,11 +75,27 @@ module Ec2DeploymentSelector
     end
 
     def load_yaml_config(config_file_path)
+      # Start with sensible defaults
+      defaults = {
+        "enabled" => true,
+        "webhook_url_env_var" => "SLACK_WEBHOOK_URL",
+        "channel" => ENV["SLACK_CHANNEL"] || "#qa_and_deployments",
+        "username" => ENV["SLACK_USERNAME"] || "Deploy Bot",
+        "emoji" => "🚀",
+        "title" => "Deployment Complete!",
+        "color" => "good",
+        "timeout" => 10,
+        "retry_attempts" => 3,
+        "retry_delay" => 1
+      }
+
+      # Override with YAML file if it exists
       if config_file_path && File.exist?(config_file_path)
-        config = YAML.load_file(config_file_path)
-        config[stage.to_s] || config["default"] || {}
+        yaml_config = YAML.load_file(config_file_path)
+        stage_config = yaml_config[stage.to_s] || yaml_config["default"] || {}
+        defaults.merge(stage_config)
       else
-        {}
+        defaults
       end
     end
 
@@ -90,20 +106,17 @@ module Ec2DeploymentSelector
       env_config["enabled"] = ENV["SLACK_NOTIFICATIONS_ENABLED"] == "true" if ENV["SLACK_NOTIFICATIONS_ENABLED"]
       env_config["webhook_url_env_var"] = ENV["SLACK_WEBHOOK_URL_ENV_VAR"] if ENV["SLACK_WEBHOOK_URL_ENV_VAR"]
       env_config["channel"] = ENV["SLACK_CHANNEL"] if ENV["SLACK_CHANNEL"]
+      env_config["username"] = ENV["SLACK_USERNAME"] if ENV["SLACK_USERNAME"]
 
       # Network settings with validation
       env_config["timeout"] = parse_positive_int(ENV["SLACK_TIMEOUT"], 10) if ENV["SLACK_TIMEOUT"]
       env_config["retry_attempts"] = parse_positive_int(ENV["SLACK_RETRY_ATTEMPTS"], 3) if ENV["SLACK_RETRY_ATTEMPTS"]
       env_config["retry_delay"] = parse_positive_int(ENV["SLACK_RETRY_DELAY"], 1) if ENV["SLACK_RETRY_DELAY"]
 
-      # Message settings
-      if ENV["SLACK_USERNAME"] || ENV["SLACK_EMOJI"] || ENV["SLACK_TITLE"] || ENV["SLACK_COLOR"]
-        env_config["message"] = {}
-        env_config["message"]["username"] = ENV["SLACK_USERNAME"] if ENV["SLACK_USERNAME"]
-        env_config["message"]["emoji"] = ENV["SLACK_EMOJI"] if ENV["SLACK_EMOJI"]
-        env_config["message"]["title"] = ENV["SLACK_TITLE"] if ENV["SLACK_TITLE"]
-        env_config["message"]["success_color"] = ENV["SLACK_COLOR"] if ENV["SLACK_COLOR"]
-      end
+      # Message customization
+      env_config["emoji"] = ENV["SLACK_EMOJI"] if ENV["SLACK_EMOJI"]
+      env_config["title"] = ENV["SLACK_TITLE"] if ENV["SLACK_TITLE"]
+      env_config["color"] = ENV["SLACK_COLOR"] if ENV["SLACK_COLOR"]
 
       config.merge(env_config)
     end
@@ -192,21 +205,21 @@ module Ec2DeploymentSelector
     end
 
     def build_message_text
-      emoji = @config.dig("message", "emoji") || "🚀"
-      title = @config.dig("message", "title") || "Deployment Complete!"
+      emoji = @config["emoji"] || "🚀"
+      title = @config["title"] || "Deployment Complete!"
       "#{emoji} #{title}"
     end
 
     def message_username
-      @config.dig("message", "username") || "deployment-notifier"
+      @config["username"] || "Deploy Bot"
     end
 
     def success_color
-      @config.dig("message", "success_color") || "good"
+      @config["color"] || "good"
     end
 
     def channel
-      @config["channel"]
+      @config["channel"] || "#qa_and_deployments"
     end
 
     def timeout

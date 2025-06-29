@@ -1,53 +1,96 @@
-# SlackNotifier Usage Examples
+# Slack Notifier Usage
 
-## Basic Usage (Standalone)
+The Slack Notifier provides deployment notifications with minimal setup through environment variables and optional YAML customization.
 
+## Quick Setup (Most Repositories)
+
+**1. Add to deploy.rb:**
 ```ruby
-require 'ec2_deployment_selector'
+require "ec2_deployment_selector"
+include Ec2DeploymentSelector::CapistranoIntegration
 
-# Create notifier with webhook URL
-notifier = Ec2DeploymentSelector::SlackNotifier.new(
-  webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL",
-  stage: "production"
-)
+define_slack_notification_tasks
 
-# Send deployment notification
-notifier.send_deployment_notification({
-  application: "my-app",
-  branch: "main",
-  user: "deploy-user",
-  timestamp: Time.now.strftime("%Y-%m-%d %H:%M:%S UTC"),
-  servers: ["server1 (10.0.1.1)", "server2 (10.0.1.2)"]
-})
-```
+# ... your deployment logic ...
 
-## Validation and Testing (Atomic Features)
-
-```ruby
-# Validate configuration before deployment
-validation = Ec2DeploymentSelector::SlackNotifier.validate_config(
-  config_file_path: "config/slack_notifications.yml",
-  stage: "production"
-)
-
-if validation[:valid]
-  puts "✅ Slack notifications properly configured"
-else
-  puts "❌ Configuration issues: #{validation[:errors].join(', ')}"
+namespace :deploy do
+  after :finished, :notify_slack
 end
-
-# Test notifications
-Ec2DeploymentSelector::SlackNotifier.test_notification(
-  config_file_path: "config/slack_notifications.yml",
-  stage: "staging"
-)
 ```
 
-## Custom Messages
+**2. Set environment variables (in CircleCI):**
+```bash
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+SLACK_CHANNEL=#deployments
+```
 
-```ruby
-# Send custom formatted messages
-notifier.send_custom_message({
+**That's it!** No config files needed.
+
+## Built-in Defaults
+
+- **Channel**: `#deployments` (override with `SLACK_CHANNEL`)
+- **Username**: `Deploy Bot` (override with `SLACK_USERNAME`)
+- **Emoji**: `🚀`
+- **Title**: `Deployment Complete!`
+- **Colors**: `good` (green for success)
+- **Retries**: 3 attempts with 1s delay
+- **Timeout**: 10 seconds
+
+## Environment Variable Overrides
+
+```bash
+# Required
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+
+# Optional customization
+SLACK_CHANNEL=#custom-deployments
+SLACK_USERNAME=Custom Bot
+SLACK_EMOJI=🎉
+SLACK_TITLE=Custom Deployment Message
+SLACK_COLOR=warning
+```
+
+## Advanced Customization (Optional)
+
+For complex customization, create `config/slack_notifications.yml`:
+
+```yaml
+staging:
+  username: "Staging Bot"
+  channel: "#staging-deployments"
+  emoji: "🏗️"
+  title: "Staging Deployment"
+
+production:
+  username: "Production Bot"
+  channel: "#production-alerts"
+  emoji: "🚀"
+  color: "danger"
+```
+
+## Configuration Priority
+
+1. **Environment Variables** (highest)
+2. **YAML File**
+3. **Built-in Defaults** (lowest)
+
+## Available Tasks
+
+```bash
+cap validate_slack_config  # Check configuration
+cap test_slack             # Send test message
+cap notify_slack           # Send deployment notification
+cap notify_slack_start     # Send deployment start notification
+```
+
+## Message Content
+
+Notifications automatically include:
+- Application name and environment
+- Git branch and deployment user
+- Target servers and IPs
+- Deployment timestamp
+- CircleCI pipeline links (when available)
   text: "🚀 Custom deployment message",
   username: "deployment-bot",
   channel: "#deployments",

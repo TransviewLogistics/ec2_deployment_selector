@@ -51,24 +51,22 @@ selector.render_all_instances
 
 ### Slack Notifications
 
+**Quick Setup (Capistrano):**
 ```ruby
 require 'ec2_deployment_selector'
+include Ec2DeploymentSelector::CapistranoIntegration
 
-# Capistrano integration
 define_slack_notification_tasks
 after :finished, :notify_slack
-
-# Standalone usage
-notifier = Ec2DeploymentSelector::SlackNotifier.new(
-  webhook_url: ENV["SLACK_WEBHOOK_URL"],
-  stage: "production"
-)
-notifier.send_deployment_notification({
-  application: "my-app",
-  environment: "production",
-  user: "deploy-user"
-})
 ```
+
+**Environment Variables:**
+```bash
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+SLACK_CHANNEL=#deployments
+```
+
+**Optional YAML override** at `config/slack_notifications.yml` for advanced customization.
 
 ## Documentation
 
