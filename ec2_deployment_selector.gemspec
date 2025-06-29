@@ -8,11 +8,11 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Calvin Delamere"]
   spec.email         = ["calvin@headlightsolutions.com"]
 
-  spec.summary       = "Selects EC2 Instances to be used for Deployment"
-  spec.description   = "Selects EC2 Instances to be used for Deployment"
+  spec.summary       = "EC2 deployment server selection and Slack notifications"
+  spec.description   = "Selects EC2 instances for deployment and provides Slack notification capabilities."
   # spec.homepage      = "TODO: Put your gem's website or public repo URL here."
   spec.license       = "MIT"
-  spec.required_ruby_version = Gem::Requirement.new(">= 2.3.0")
+  spec.required_ruby_version = Gem::Requirement.new(">= 2.6.0")
 
   # spec.metadata["allowed_push_host"] = "TODO: Set to 'http://mygemserver.com'"
 
@@ -28,6 +28,8 @@ Gem::Specification.new do |spec|
   spec.bindir        = "exe"
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
+
+  # Core EC2 deployment selection dependencies
   spec.add_dependency "aws-sdk-ec2"
   spec.add_dependency "colorize" # Color terminal output
   spec.add_dependency "terminal-table" # Creating tables in terminal output

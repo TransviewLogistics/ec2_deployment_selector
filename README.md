@@ -1,13 +1,20 @@
 # Ec2DeploymentSelector
 
-EC2 Deployment Selector is a Ruby gem that simplifies the process of selecting Amazon EC2 instances for deployment. It provides an interactive interface for filtering and selecting instances based on tags, regions, and application names. It's particularly useful when integrated with Capistrano for deployment automation.
+EC2 Deployment Selector is a Ruby gem that provides deployment tooling for Amazon EC2 environments.
 
-This gem allows you to:
+## Features
+
+### 🎯 EC2 Instance Selection
 - Fetch EC2 instances across multiple AWS regions
 - Filter instances by application name and custom tags
-- Present instances in a formatted table with color-coded status information
-- Interactively select instances for deployment
-- Support non-interactive mode for CI/CD pipelines
+- Interactive and non-interactive selection modes
+- Capistrano integration for deployment automation
+
+### 📤 Slack Notifications
+- Deployment notifications with comprehensive data collection
+- Capistrano integration with automatic data collection
+- Configurable via YAML files or environment variables
+- Built-in retry logic, validation, and error handling
 
 ## Installation
 
@@ -25,7 +32,53 @@ Or install it yourself as:
 
     $ gem install ec2_deployment_selector
 
-## Usage
+## Quick Start
+
+### EC2 Instance Selection
+
+```ruby
+require "ec2_deployment_selector"
+
+selector = Ec2DeploymentSelector::Selector.new(
+  access_key_id: ENV["ACCESS_KEY_ID"],
+  secret_access_key: ENV["SECRET_ACCESS_KEY"],
+  application_name: "my-app",
+  filters: { "ENV_Type" => "production" }
+)
+
+selector.render_all_instances
+```
+
+### Slack Notifications
+
+```ruby
+require "ec2_deployment_selector"
+
+# Basic notification
+notifier = Ec2DeploymentSelector::SlackNotifier.new(
+  webhook_url: ENV["SLACK_WEBHOOK_URL"],
+  stage: "production"
+)
+
+notifier.send_deployment_notification({
+  application: "my-app",
+  branch: "main",
+  user: "deployer"
+})
+```
+
+### Capistrano Integration (Notifications)
+
+Add to your `config/deploy.rb`:
+
+```ruby
+require 'ec2_deployment_selector'
+
+define_slack_notification_tasks
+after :finished, :notify_slack
+```
+
+### Usage
 
 ### Basic Setup
 
@@ -83,6 +136,33 @@ For CI/CD pipelines:
 
 ```bash
 NON_INTERACTIVE=true bundle exec cap production deploy
+```
+
+## Slack Notifications
+
+The gem includes Slack notification capabilities.
+
+### Configuration
+
+Create `config/slack_notifications.yml`:
+
+```yaml
+production:
+  enabled: true
+  webhook_url_env_var: "SLACK_WEBHOOK_URL"
+  channel: "#deployments"
+  message:
+    username: "deployment-bot"
+    emoji: "🚀"
+```
+
+### Available Capistrano Tasks
+
+```bash
+cap production validate_slack_config  # Validate configuration
+cap production test_slack             # Send test notification
+cap production notify_slack_start     # Deployment start notification
+cap production notify_slack           # Deployment completion notification
 ```
 
 ## Instance Deployability
