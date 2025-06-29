@@ -1,0 +1,23 @@
+# Slack Notifications Configuration Template
+
+staging:
+  enabled: true
+  webhook_url_env_var: "SLACK_WEBHOOK_URL"
+  channel: "#qa_and_deployments"
+  timeout: 10
+
+production:
+  enabled: true
+  webhook_url_env_var: "SLACK_WEBHOOK_URL"
+  channel: "#qa_and_deployments"
+  timeout: 10
+
+default:
+  enabled: false
+  timeout: 10
+
+message:
+  username: "deployment-bot"
+  emoji: "🚀"
+  title: "Deployment Complete!"
+  success_color: "good"
