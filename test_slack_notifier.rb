@@ -15,7 +15,15 @@ rescue => e
   exit 1
 end
 
-# Test 2: Can create notification without webhook (should fail gracefully)
+# Test 2: Configuration validation (atomic feature)
+begin
+  validation = Ec2DeploymentSelector::SlackNotifier.validate_config(stage: "test")
+  puts "✅ Configuration validation working"
+rescue => e
+  puts "❌ Configuration validation error: #{e.message}"
+end
+
+# Test 3: Can create notification without webhook (should fail gracefully)
 begin
   result = notifier.send_deployment_notification({
     application: "test-app",
@@ -27,7 +35,18 @@ rescue => e
   puts "❌ Error handling missing webhook: #{e.message}"
 end
 
-# Test 3: Message building with modern Ruby features
+# Test 4: URL validation (atomic feature)
+begin
+  test_notifier = Ec2DeploymentSelector::SlackNotifier.new(
+    webhook_url: "https://hooks.slack.com/services/test/webhook/url",
+    stage: "test"
+  )
+  puts "✅ URL validation working"
+rescue => e
+  puts "❌ URL validation error: #{e.message}"
+end
+
+# Test 5: Message building with modern Ruby features
 begin
   # Test with keyword arguments and modern hash syntax
   notifier_with_config = Ec2DeploymentSelector::SlackNotifier.new(
