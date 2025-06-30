@@ -1,23 +1,11 @@
-# Slack Notifications Configuration Template
-
-staging:
-  enabled: true
-  webhook_url_env_var: "SLACK_WEBHOOK_URL"
-  channel: "#qa_and_deployments"
-  timeout: 10
+# Optional Slack Notifications Configuration
+# Most settings can be set via environment variables
+# Only use this file if you need per-environment customization
 
 production:
-  enabled: true
-  webhook_url_env_var: "SLACK_WEBHOOK_URL"
-  channel: "#qa_and_deployments"
-  timeout: 10
+  channel: "#production-deployments"
+  username: "Production Bot"
 
-default:
-  enabled: false
-  timeout: 10
-
-message:
-  username: "deployment-bot"
-  emoji: "🚀"
-  title: "Deployment Complete!"
-  success_color: "good"
+staging:
+  channel: "#staging-deployments"
+  username: "Staging Bot"

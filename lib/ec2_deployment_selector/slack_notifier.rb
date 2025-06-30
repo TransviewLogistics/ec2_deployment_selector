@@ -5,145 +5,55 @@ require "yaml"
 
 module Ec2DeploymentSelector
   class SlackNotifier
-    attr_reader :config, :webhook_url, :stage
-
-    def self.validate_config(config_file_path: nil, stage: nil)
-      notifier = new(config_file_path: config_file_path, stage: stage)
-
-      errors = []
-      errors << "Notifications are disabled" unless notifier.send(:notifications_enabled?)
-      errors << "Webhook URL not configured" unless notifier.send(:webhook_url_configured?)
-      errors << "Invalid webhook URL format" unless notifier.send(:valid_webhook_url?)
-
-      { valid: errors.empty?, errors: errors }
-    end
-
-    def self.test_notification(config_file_path: nil, stage: nil, webhook_url: nil)
-      notifier = new(config_file_path: config_file_path, stage: stage, webhook_url: webhook_url)
-
-      test_data = {
-        application: "test-app",
-        environment: stage || "test",
-        branch: "test-branch",
-        user: "test-user",
-        timestamp: Time.now.strftime("%Y-%m-%d %H:%M:%S %Z")
-      }
-
-      notifier.send_deployment_notification(test_data)
-    end
-
     def initialize(config_file_path: nil, stage: nil, webhook_url: nil)
       @stage = stage
       @webhook_url = webhook_url
-      @config = load_config(config_file_path)
+      @config = {
+        "enabled" => true,
+        "channel" => "#qa_and_deployments",
+        "username" => "Deploy Bot",
+        "emoji" => "🚀",
+        "title" => "Deployment Complete!",
+        "color" => "good"
+      }
+
+      # Load YAML config if file exists
+      if config_file_path && File.exist?(config_file_path)
+        yaml_config = YAML.load_file(config_file_path)
+        stage_config = yaml_config[stage.to_s] || yaml_config["default"] || {}
+        @config.merge!(stage_config)
+      end
+
+      # Override with environment variables
+      %w[enabled channel username emoji title color].each do |key|
+        env_key = key == "enabled" ? "SLACK_NOTIFICATIONS_ENABLED" : "SLACK_#{key.upcase}"
+        @config[key] = key == "enabled" ? ENV[env_key] == "true" : ENV[env_key] if ENV[env_key]
+      end
     end
 
     def send_deployment_notification(deployment_data = {})
-      unless notifications_enabled?
-        puts "ℹ️  Slack notifications disabled for #{stage} environment"
-        return false
-      end
-
-      unless webhook_url_configured?
-        puts "⚠️  Slack webhook URL not configured for #{stage}"
-        return false
-      end
-
-      unless valid_webhook_url?
-        puts "⚠️  Invalid Slack webhook URL format"
-        return false
-      end
+      return false unless notifications_enabled? && webhook_url_valid?
 
       message = build_message(deployment_data)
       send_message(message)
     end
 
     def send_custom_message(message_payload)
-      unless webhook_url_configured?
-        puts "⚠️  Slack webhook URL not configured"
-        return false
-      end
-
+      return false unless webhook_url_valid?
       send_message(message_payload)
     end
 
     private
 
-    def load_config(config_file_path)
-      config = load_yaml_config(config_file_path)
-      merge_env_config(config)
-    end
-
-    def load_yaml_config(config_file_path)
-      # Start with sensible defaults
-      defaults = {
-        "enabled" => true,
-        "webhook_url_env_var" => "SLACK_WEBHOOK_URL",
-        "channel" => ENV["SLACK_CHANNEL"] || "#qa_and_deployments",
-        "username" => ENV["SLACK_USERNAME"] || "Deploy Bot",
-        "emoji" => "🚀",
-        "title" => "Deployment Complete!",
-        "color" => "good",
-        "timeout" => 10,
-        "retry_attempts" => 3,
-        "retry_delay" => 1
-      }
-
-      # Override with YAML file if it exists
-      if config_file_path && File.exist?(config_file_path)
-        yaml_config = YAML.load_file(config_file_path)
-        stage_config = yaml_config[stage.to_s] || yaml_config["default"] || {}
-        defaults.merge(stage_config)
-      else
-        defaults
-      end
-    end
-
-    def merge_env_config(config)
-      env_config = {}
-
-      # Core settings
-      env_config["enabled"] = ENV["SLACK_NOTIFICATIONS_ENABLED"] == "true" if ENV["SLACK_NOTIFICATIONS_ENABLED"]
-      env_config["webhook_url_env_var"] = ENV["SLACK_WEBHOOK_URL_ENV_VAR"] if ENV["SLACK_WEBHOOK_URL_ENV_VAR"]
-      env_config["channel"] = ENV["SLACK_CHANNEL"] if ENV["SLACK_CHANNEL"]
-      env_config["username"] = ENV["SLACK_USERNAME"] if ENV["SLACK_USERNAME"]
-
-      # Network settings with validation
-      env_config["timeout"] = parse_positive_int(ENV["SLACK_TIMEOUT"], 10) if ENV["SLACK_TIMEOUT"]
-      env_config["retry_attempts"] = parse_positive_int(ENV["SLACK_RETRY_ATTEMPTS"], 3) if ENV["SLACK_RETRY_ATTEMPTS"]
-      env_config["retry_delay"] = parse_positive_int(ENV["SLACK_RETRY_DELAY"], 1) if ENV["SLACK_RETRY_DELAY"]
-
-      # Message customization
-      env_config["emoji"] = ENV["SLACK_EMOJI"] if ENV["SLACK_EMOJI"]
-      env_config["title"] = ENV["SLACK_TITLE"] if ENV["SLACK_TITLE"]
-      env_config["color"] = ENV["SLACK_COLOR"] if ENV["SLACK_COLOR"]
-
-      config.merge(env_config)
-    end
-
-    def parse_positive_int(value, default)
-      parsed = value.to_i
-      parsed > 0 ? parsed : default
-    end
-
     def notifications_enabled?
       @config["enabled"] != false
     end
 
-    def webhook_url_configured?
-      return true if @webhook_url
+    def webhook_url_valid?
+      @webhook_url ||= ENV["SLACK_WEBHOOK_URL"]
+      return false if @webhook_url.to_s.empty?
 
-      webhook_url_env_var = @config["webhook_url_env_var"]
-      @webhook_url = ENV[webhook_url_env_var] if webhook_url_env_var
-
-      !@webhook_url.nil? && !@webhook_url.empty?
-    end
-
-    def valid_webhook_url?
-      return false unless @webhook_url
-
-      uri = URI.parse(@webhook_url)
-      uri.is_a?(URI::HTTP) || uri.is_a?(URI::HTTPS)
+      URI.parse(@webhook_url).is_a?(URI::HTTP)
     rescue URI::InvalidURIError
       false
     end
@@ -152,16 +62,12 @@ module Ec2DeploymentSelector
       fields = build_fields(deployment_data)
 
       message = {
-        text: build_message_text,
-        username: message_username,
-        attachments: [
-          {
-            color: success_color,
-            fields: fields,
-          },
-        ],
+        text: "#{@config["emoji"]} #{@config["title"]}",
+        username: ENV["SLACK_USERNAME"] || @config["username"],
+        attachments: [{ color: @config["color"], fields: fields }]
       }
 
+      channel = ENV["SLACK_CHANNEL"] || @config["channel"]
       message[:channel] = channel if channel
       message
     end
@@ -169,104 +75,58 @@ module Ec2DeploymentSelector
     def build_fields(deployment_data)
       fields = []
 
-      fields << {title: "Application", value: deployment_data[:application], short: true} if deployment_data[:application]
-      fields << {title: "Environment", value: deployment_data[:environment] || stage.to_s.capitalize, short: true} if stage
-      fields << {title: "Branch", value: deployment_data[:branch], short: true} if deployment_data[:branch]
-      fields << {title: "Deployed by", value: deployment_data[:user], short: true} if deployment_data[:user]
+      # Basic deployment info
+      {
+        "Application" => deployment_data[:application],
+        "Environment" => deployment_data[:environment] || @stage&.to_s&.capitalize,
+        "Branch" => deployment_data[:branch],
+        "Revision" => deployment_data[:revision] && (deployment_data[:revision].length > 8 ? deployment_data[:revision][0..7] : deployment_data[:revision]),
+        "Deployed by" => deployment_data[:user]
+      }.each { |title, value| fields << {title: title, value: value, short: true} if value }
+
+      # Timestamp
       fields << {title: "Completed at", value: deployment_data[:timestamp], short: false} if deployment_data[:timestamp]
 
-      if deployment_data[:servers] && !deployment_data[:servers].empty?
-        server_list = format_servers(deployment_data[:servers])
-        fields << {title: "Target Servers", value: server_list, short: false}
+      # Servers
+      if deployment_data[:servers]&.any?
+        fields << {title: "Target Servers", value: format_servers(deployment_data[:servers]), short: false}
       elsif deployment_data[:target_ips] && !deployment_data[:target_ips].strip.empty?
         fields << {title: "Target Servers", value: deployment_data[:target_ips], short: false}
       end
 
+      # Pipeline
       if deployment_data[:build_url]
         fields << {title: "Pipeline", value: "<#{deployment_data[:build_url]}|View in CircleCI>", short: true}
       elsif deployment_data[:workflow_id]
-        circle_url = "https://app.circleci.com/pipelines/workflows/#{deployment_data[:workflow_id]}"
-        fields << {title: "Pipeline", value: "<#{circle_url}|View in CircleCI>", short: true}
+        url = "https://app.circleci.com/pipelines/workflows/#{deployment_data[:workflow_id]}"
+        fields << {title: "Pipeline", value: "<#{url}|View in CircleCI>", short: true}
       end
 
       fields
     end
 
     def format_servers(servers)
-      if servers.is_a?(Array) && servers.first.is_a?(Hash)
-        servers.map { |server|
-          "#{server[:name] || 'Unknown'} (#{server[:public_ip] || server[:ip] || 'No IP'})"
-        }.join(", ")
-      elsif servers.is_a?(Array)
-        servers.join(", ")
-      else
-        servers.to_s
-      end
-    end
+      return servers.to_s unless servers.is_a?(Array)
+      return servers.join(", ") unless servers.first.is_a?(Hash)
 
-    def build_message_text
-      emoji = @config["emoji"] || "🚀"
-      title = @config["title"] || "Deployment Complete!"
-      "#{emoji} #{title}"
-    end
-
-    def message_username
-      @config["username"] || "Deploy Bot"
-    end
-
-    def success_color
-      @config["color"] || "good"
-    end
-
-    def channel
-      @config["channel"] || "#qa_and_deployments"
-    end
-
-    def timeout
-      @config["timeout"] || 10
-    end
-
-    def retry_attempts
-      @config["retry_attempts"] || 3
-    end
-
-    def retry_delay
-      @config["retry_delay"] || 1
+      servers.map { |server|
+        name = server[:name] || 'Unknown'
+        ip = server[:public_ip] || server[:ip] || 'No IP'
+        metadata = [server[:layers], server[:instance_type], server[:region]].compact.reject(&:empty?)
+        metadata.any? ? "#{name} (#{ip}) [#{metadata.join(', ')}]" : "#{name} (#{ip})"
+      }.join(", ")
     end
 
     def send_message(message_payload)
-      attempt = 1
-
-      loop do
+      3.times do |attempt|
         begin
           response = send_http_request(message_payload)
-
-          if response.code == "200"
-            puts "✅ Slack notification sent successfully to #{channel || "webhook default channel"}"
-            return true
-          else
-            error_msg = "#{response.code} #{response.message}"
-
-            if attempt < retry_attempts
-              puts "⚠️ Slack notification failed (#{error_msg}), retrying in #{retry_delay}s... (attempt #{attempt}/#{retry_attempts})"
-              sleep(retry_delay)
-              attempt += 1
-            else
-              puts "⚠️ Slack notification failed after #{retry_attempts} attempts: #{error_msg}"
-              return false
-            end
-          end
+          return response.code == "200"
         rescue => e
-          if attempt < retry_attempts
-            puts "⚠️ Slack notification error, retrying in #{retry_delay}s... (attempt #{attempt}/#{retry_attempts}): #{e.message}"
-            sleep(retry_delay)
-            attempt += 1
-          else
-            puts "⚠️ Slack notification error after #{retry_attempts} attempts (deployment continued): #{e.message}"
-            return false
-          end
+          sleep(1) unless attempt == 2
         end
       end
+      false
     end
 
     def send_http_request(message_payload)
@@ -274,23 +134,14 @@ module Ec2DeploymentSelector
 
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = uri.scheme == "https"
-      http.read_timeout = timeout
-      http.open_timeout = timeout
+      http.read_timeout = 10
+      http.open_timeout = 10
 
       request = Net::HTTP::Post.new(uri)
       request["Content-Type"] = "application/json"
-      request["User-Agent"] = "ec2-deployment-selector/#{defined?(Ec2DeploymentSelector::VERSION) ? Ec2DeploymentSelector::VERSION : '1.0.0'}"
       request.body = message_payload.to_json
 
       http.request(request)
-    rescue Net::TimeoutError => e
-      raise "Request timeout after #{timeout}s: #{e.message}"
-    rescue SocketError => e
-      raise "Network error: #{e.message}"
-    rescue OpenSSL::SSL::SSLError => e
-      raise "SSL error: #{e.message}"
-    rescue => e
-      raise "HTTP request failed: #{e.message}"
     end
   end
 end
