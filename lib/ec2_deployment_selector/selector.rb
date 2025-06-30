@@ -66,10 +66,10 @@ module Ec2DeploymentSelector
 
     def auto_register_for_capistrano_notifications
       begin
-        require_relative 'capistrano_integration'
-        Ec2DeploymentSelector::CapistranoIntegration.register_ec2_instances(selected_instances)
+        require_relative 'slack_notifier'
+        Ec2DeploymentSelector::SlackNotifier.register_ec2_instances(selected_instances)
       rescue LoadError, NameError => e
-        # Silently ignore if Capistrano integration is not available
+        # Silently ignore if Slack notifier is not available
       end
     end
 

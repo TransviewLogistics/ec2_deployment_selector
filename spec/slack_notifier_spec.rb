@@ -20,6 +20,10 @@ RSpec.describe Ec2DeploymentSelector::SlackNotifier do
     let(:notifier) { described_class.new(stage: "test") }
 
     context 'without webhook URL' do
+      before do
+        ENV.delete("SLACK_WEBHOOK_URL")
+      end
+
       it 'fails gracefully when webhook URL is missing' do
         result = notifier.send_deployment_notification({
           application: "test-app",

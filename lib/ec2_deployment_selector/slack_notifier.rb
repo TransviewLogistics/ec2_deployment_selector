@@ -5,6 +5,33 @@ require "yaml"
 
 module Ec2DeploymentSelector
   class SlackNotifier
+    @@ec2_instance_metadata = {}
+
+    def self.register_ec2_instances(instances)
+      return unless instances
+
+      @@ec2_instance_metadata = {}
+      instances.each do |instance|
+        public_ip = instance.public_ip_address
+        private_ip = instance.private_ip_address
+
+        [public_ip, private_ip].compact.each do |ip|
+          @@ec2_instance_metadata[ip] = {
+            name: instance.name,
+            public_ip: public_ip,
+            private_ip: private_ip,
+            instance_type: instance.instance_type,
+            layers: instance.layers,
+            region: instance.region
+          }
+        end
+      end
+    end
+
+    def self.get_ec2_metadata(hostname)
+      @@ec2_instance_metadata[hostname]
+    end
+
     def initialize(config_file_path: nil, stage: nil, webhook_url: nil)
       @stage = stage
       @webhook_url = webhook_url
@@ -33,6 +60,8 @@ module Ec2DeploymentSelector
 
     def send_deployment_notification(deployment_data = {})
       return false unless notifications_enabled? && webhook_url_valid?
+
+      deployment_data = auto_detect_deployment_data.merge(deployment_data)
 
       message = build_message(deployment_data)
       send_message(message)
@@ -142,6 +171,14 @@ module Ec2DeploymentSelector
       request.body = message_payload.to_json
 
       http.request(request)
+    end
+
+    def auto_detect_deployment_data
+      {
+        environment: @stage&.to_s&.capitalize,
+        user: ENV.values_at("CIRCLE_USERNAME", "USER", "USERNAME").compact.first || (`whoami`.strip rescue "unknown"),
+        timestamp: Time.now.strftime("%Y-%m-%d %H:%M:%S UTC")
+      }
     end
   end
 end
