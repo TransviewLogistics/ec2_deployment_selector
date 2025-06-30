@@ -29,7 +29,6 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  # Core EC2 deployment selection dependencies
   spec.add_dependency "aws-sdk-ec2"
   spec.add_dependency "colorize" # Color terminal output
   spec.add_dependency "terminal-table" # Creating tables in terminal output

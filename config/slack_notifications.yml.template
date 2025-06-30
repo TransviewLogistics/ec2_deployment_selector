@@ -1,11 +1,18 @@
 # Optional Slack Notifications Configuration
-# Most settings can be set via environment variables
 # Only use this file if you need per-environment customization
 
 production:
+  enabled: true
   channel: "#production-deployments"
   username: "Production Bot"
+  emoji: "🚨"
+  title: "Production Deployment!"
+  color: "danger"
 
 staging:
+  enabled: true
   channel: "#staging-deployments"
   username: "Staging Bot"
+  emoji: "🧪"
+  title: "Staging Deployment Complete"
+  color: "warning"
