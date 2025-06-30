@@ -2,7 +2,7 @@ namespace :ec2_deployment_selector do
   namespace :slack do
     desc 'Notify about deployment completion'
     task :notify do
-      # ...existing code...
+      # Collect server info with EC2 metadata
       servers = []
       if respond_to?(:roles) && roles(:all).any?
         servers = roles(:all).map do |server|

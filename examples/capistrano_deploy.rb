@@ -4,12 +4,6 @@
 
 require 'ec2_deployment_selector'
 
-# Include Capistrano integration methods
-include Ec2DeploymentSelector::CapistranoIntegration
-
-# Define notification tasks (makes Slack tasks available in Capistrano context)
-define_slack_notification_tasks
-
 # EC2 instance selection
 configure_ec2_selector = ->(env) do
   selector = Ec2DeploymentSelector::Selector.new(
@@ -22,7 +16,7 @@ configure_ec2_selector = ->(env) do
   selector.render_all_instances
   selector.prompt_select_instances unless ENV["NON_INTERACTIVE"] == "true"
 
-  # Standard server definitions (EC2 metadata automatically captured for Slack notifications)
+  # Standard server definitions
   selector.selected_instances.each do |instance|
     server instance.public_ip_address, user: "deploy", roles: %w{app}
   end
@@ -32,13 +26,11 @@ configure_ec2_selector.call('production') if fetch(:stage) == :production
 
 # Custom notification with additional data
 task :custom_notify do
-  run_locally do
-    send_deployment_notification(nil, {
-      feature: fetch(:feature_name, "standard"),
-      custom_field: "value"
-    })
-  end
+  invoke "ec2_deployment_selector:slack:notify", "Custom notification", {
+    feature: fetch(:feature_name, "standard"),
+    custom_field: "value"
+  }
 end
 
-# Deployment hooks
-after :finished, :notify_slack
+# Deployment hooks - use the explicit task name
+after :finished, "ec2_deployment_selector:slack:notify"

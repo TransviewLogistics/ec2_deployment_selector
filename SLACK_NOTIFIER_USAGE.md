@@ -1,16 +1,15 @@
 # Slack Notifier Usage
 
-Simple deployment notifications with minimal setup using environment variables.
+Simple deployment notifications with automatic EC2 metadata detection.
 
 ## Quick Setup
 
 **1. Add to deploy.rb:**
 ```ruby
 require "ec2_deployment_selector"
-include Ec2DeploymentSelector::CapistranoIntegration
 
-define_slack_notification_tasks
-after :finished, :notify_slack
+# Hook into deployment lifecycle (you control when)
+after 'deploy:finished', 'ec2_deployment_selector:slack:notify'
 ```
 
 **2. Set environment variable:**
@@ -18,7 +17,14 @@ after :finished, :notify_slack
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 ```
 
-That's it! No config files needed.
+That's it! Notifications automatically include rich EC2 metadata when using the gem's instance selector.
+
+## Features
+
+- **Automatic EC2 metadata** - Instance names, types, regions automatically included in notifications
+- **Zero configuration** - Works with just a webhook URL
+- **Environment-specific settings** - Optional YAML configuration per environment
+- **Rich deployment context** - Git branch, user, timestamp, target servers
 
 ## Configuration
 
@@ -51,12 +57,12 @@ production:
 
 ## Available Tasks
 ```bash
-cap production notify_slack        # Send deployment notification
+cap production ec2_deployment_selector:slack:notify  # Send deployment notification
 ```
 
 ## Direct Usage
 ```ruby
-notifier = Ec2DeploymentSelector::SlackNotifier.new
+notifier = Ec2DeploymentSelector::SlackNotifier.new(stage: "production")
 notifier.send_deployment_notification({
   application: "my-app",
   environment: "production",

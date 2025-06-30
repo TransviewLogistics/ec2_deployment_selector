@@ -33,11 +33,11 @@ selector.prompt_select_instances
 
 ### Slack Notifications
 ```ruby
+# In your config/deploy.rb
 require "ec2_deployment_selector"
-include Ec2DeploymentSelector::CapistranoIntegration
 
-define_slack_notification_tasks
-after :finished, :notify_slack
+# Hook into deployment lifecycle (you control when to notify)
+after 'deploy:finished', 'ec2_deployment_selector:slack:notify'
 ```
 
 Set environment variable:
@@ -51,35 +51,13 @@ SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 
 ## Capistrano Integration
 
-### Basic EC2 Selection
+Add the gem to your Gemfile and require it in your `config/deploy.rb`:
+
 ```ruby
-require "ec2_deployment_selector"
-
-configure_ec2_selector = ->(env) do
-  selector = Ec2DeploymentSelector::Selector.new(
-    access_key_id: ENV["ACCESS_KEY_ID"],
-    secret_access_key: ENV["SECRET_ACCESS_KEY"],
-    application_name: fetch(:application),
-    filters: { "ENV_Type" => env }
-  )
-
-  selector.render_all_instances
-
-  if ENV["NON_INTERACTIVE"] == "true"
-    # Auto-select deployable instances
-    selector.selected_instances = selector.instances.select(&:deployable?)
-  else
-    selector.prompt_select_instances
-    selector.confirm_selected_instances
-  end
-
-  selector.selected_instances.each do |instance|
-    server instance.public_ip_address, user: "deploy", roles: %w{app}
-  end
-end
-
-configure_ec2_selector.call('production') if fetch(:stage) == :production
+require 'ec2_deployment_selector'
 ```
+
+See [examples/capistrano_deploy.rb](examples/capistrano_deploy.rb) for complete setup examples.
 
 ### Environment Variables
 
@@ -91,6 +69,16 @@ configure_ec2_selector.call('production') if fetch(:stage) == :production
 - `NON_INTERACTIVE=true` - Skip interactive prompts
 - `TARGET_IPS=ip1,ip2` - Deploy to specific IPs only
 - `SLACK_WEBHOOK_URL` - Enable Slack notifications
+
+### Available Tasks
+
+```bash
+# Slack notifications
+cap production ec2_deployment_selector:slack:notify
+
+# Manual task invocation
+invoke 'ec2_deployment_selector:slack:notify'
+```
 
 ### Non-Interactive Mode
 
