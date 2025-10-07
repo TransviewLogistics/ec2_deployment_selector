@@ -8,6 +8,7 @@ production:
   emoji: "🚨"
   title: "Production Deployment!"
   color: "danger"
+  show_target_servers: false
 
 staging:
   enabled: true
@@ -16,3 +17,4 @@ staging:
   emoji: "🧪"
   title: "Staging Deployment Complete"
   color: "warning"
+  show_target_servers: true

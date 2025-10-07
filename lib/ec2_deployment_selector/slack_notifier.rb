@@ -32,7 +32,7 @@ module Ec2DeploymentSelector
       @@ec2_instance_metadata[hostname]
     end
 
-    def initialize(config_file_path: nil, stage: nil, webhook_url: nil)
+    def initialize(stage: nil, webhook_url: nil)
       @stage = stage
       @webhook_url = webhook_url
       @config = {
@@ -56,6 +56,14 @@ module Ec2DeploymentSelector
         env_key = key == "enabled" ? "SLACK_NOTIFICATIONS_ENABLED" : "SLACK_#{key.upcase}"
         @config[key] = key == "enabled" ? ENV[env_key] == "true" : ENV[env_key] if ENV[env_key]
       end
+
+      if ENV.key?("SLACK_SHOW_TARGET_SERVERS")
+        @config["show_target_servers"] = ENV["SLACK_SHOW_TARGET_SERVERS"] == "true"
+      end
+    end
+
+    def config_file_path
+      File.expand_path("config/slack_notifications.yml", Dir.pwd)
     end
 
     def send_deployment_notification(deployment_data = {})
@@ -117,17 +125,22 @@ module Ec2DeploymentSelector
       fields << {title: "Completed at", value: deployment_data[:timestamp], short: false} if deployment_data[:timestamp]
 
       # Servers
-      if deployment_data[:servers]&.any?
-        fields << {title: "Target Servers", value: format_servers(deployment_data[:servers]), short: false}
-      elsif deployment_data[:target_ips] && !deployment_data[:target_ips].strip.empty?
-        fields << {title: "Target Servers", value: deployment_data[:target_ips], short: false}
+      show_target_servers = @config.fetch("show_target_servers", true)
+      if show_target_servers
+        servers_value =
+          if deployment_data[:servers]&.any?
+            format_servers(deployment_data[:servers])
+          elsif deployment_data[:target_ips]&.strip&.empty? == false
+            deployment_data[:target_ips]
+          end
+        fields << {title: "Target Servers", value: servers_value, short: false} if servers_value
       end
 
       # Pipeline
-      if deployment_data[:build_url]
-        fields << {title: "Pipeline", value: "<#{deployment_data[:build_url]}|View in CircleCI>", short: true}
-      elsif deployment_data[:workflow_id]
-        url = "https://app.circleci.com/pipelines/workflows/#{deployment_data[:workflow_id]}"
+      if ENV["CIRCLE_BUILD_URL"]
+        fields << {title: "Pipeline", value: "<#{ENV["CIRCLE_BUILD_URL"]}|View in CircleCI>", short: true}
+      elsif ENV["CIRCLE_WORKFLOW_ID"]
+        url = "https://app.circleci.com/pipelines/workflows/#{ENV["CIRCLE_WORKFLOW_ID"]}"
         fields << {title: "Pipeline", value: "<#{url}|View in CircleCI>", short: true}
       end
 

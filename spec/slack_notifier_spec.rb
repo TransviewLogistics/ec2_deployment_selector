@@ -115,6 +115,7 @@ RSpec.describe Ec2DeploymentSelector::SlackNotifier do
     it 'uses environment variables for configuration' do
       ENV["SLACK_CHANNEL"] = "#test-channel"
       ENV["SLACK_USERNAME"] = "Test Bot"
+      ENV["SLACK_SHOW_TARGET_SERVERS"] = "false"
 
       notifier = described_class.new(stage: "test")
       message = notifier.send(:build_message, { application: "test" })
@@ -122,15 +123,32 @@ RSpec.describe Ec2DeploymentSelector::SlackNotifier do
       expect(message[:username]).to eq("Test Bot")
       expect(message[:channel]).to eq("#test-channel")
 
+      # Should not show Target Servers field if ENV disables it
+      fields = message[:attachments].first[:fields]
+      expect(fields.none? { |f| f[:title] == "Target Servers" }).to be true
+
       # Cleanup
       ENV.delete("SLACK_CHANNEL")
       ENV.delete("SLACK_USERNAME")
+      ENV.delete("SLACK_SHOW_TARGET_SERVERS")
     end
 
-    it 'loads configuration from YAML if provided' do
-      # This would test YAML configuration loading
-      # For now, just ensure it doesn't break without a config file
-      expect { described_class.new(config_file_path: "nonexistent.yml", stage: "test") }.not_to raise_error
+    it 'loads configuration from YAML if present and overrides defaults' do
+      require 'tempfile'
+      Tempfile.open(['slack_notifications', '.yml']) do |file|
+        file.write("test:\n  channel: '#yaml-channel'\n  show_target_servers: false\n")
+        file.flush
+        # Temporarily change Dir.pwd to the temp file's directory
+        Dir.chdir(File.dirname(file.path)) do
+          FileUtils.mkdir_p('config')
+          FileUtils.cp(file.path, 'config/slack_notifications.yml')
+          notifier = described_class.new(stage: "test")
+          message = notifier.send(:build_message, { application: "test" })
+          expect(message[:channel]).to eq("#yaml-channel")
+          fields = message[:attachments].first[:fields]
+          expect(fields.none? { |f| f[:title] == "Target Servers" }).to be true
+        end
+      end
     end
   end
 end
