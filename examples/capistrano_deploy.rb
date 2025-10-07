@@ -1,4 +1,3 @@
-
 # Complete Capistrano integration with ec2_deployment_selector
 # Add this to your config/deploy.rb
 

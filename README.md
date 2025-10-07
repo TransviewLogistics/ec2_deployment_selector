@@ -107,11 +107,7 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 Run the test suite with:
 
 ```bash
-# Run all tests
-rake spec
-
-# Or run RSpec directly
-rspec
+bundle exec rspec
 ```
 
 ## Contributing

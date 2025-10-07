@@ -36,8 +36,6 @@ SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 # Optional
 SLACK_CHANNEL=#deployments
 SLACK_USERNAME=Deploy Bot
-SLACK_EMOJI=🚀
-SLACK_TITLE=Deployment Complete!
 ```
 
 ### YAML File (Optional)
@@ -49,7 +47,7 @@ production:
 ```
 
 ## Built-in Defaults
-- Channel: `#deployments`
+- Channel: `#qa_and_deployments`
 - Username: `Deploy Bot`
 - Emoji: `🚀`
 - Title: `Deployment Complete!`
@@ -64,8 +62,8 @@ cap production ec2_deployment_selector:slack:notify  # Send deployment notificat
 ```ruby
 notifier = Ec2DeploymentSelector::SlackNotifier.new(stage: "production")
 notifier.send_deployment_notification({
-  application: "my-app",
+  application: "app",
   environment: "production",
-  branch: "main"
+  branch: "master"
 })
 ```
