@@ -56,11 +56,22 @@ module Ec2DeploymentSelector
     end
 
     def selected_instances_public_ips
+      auto_register_for_capistrano_notifications
       selected_instances.map(&:public_ip_address)
     end
 
     private
+
     attr_accessor :access_key_id, :secret_access_key, :application_name, :regions, :filters
+
+    def auto_register_for_capistrano_notifications
+      begin
+        require_relative 'slack_notifier'
+        Ec2DeploymentSelector::SlackNotifier.register_ec2_instances(selected_instances)
+      rescue LoadError, NameError => e
+        # Silently ignore if Slack notifier is not available
+      end
+    end
 
     def render_table(instances, title, include_num_column:)
       rows = instances.map do |instance|

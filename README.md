@@ -1,88 +1,95 @@
 # Ec2DeploymentSelector
 
-EC2 Deployment Selector is a Ruby gem that simplifies the process of selecting Amazon EC2 instances for deployment. It provides an interactive interface for filtering and selecting instances based on tags, regions, and application names. It's particularly useful when integrated with Capistrano for deployment automation.
+EC2 deployment tooling and Slack notifications for Ruby applications.
 
-This gem allows you to:
-- Fetch EC2 instances across multiple AWS regions
-- Filter instances by application name and custom tags
-- Present instances in a formatted table with color-coded status information
-- Interactively select instances for deployment
-- Support non-interactive mode for CI/CD pipelines
+## Features
+
+- **EC2 Instance Selection**: Find and select EC2 instances for deployment
+- **Slack Notifications**: Send deployment notifications with minimal setup
+- **Capistrano Integration**: Automated deployment workflows
 
 ## Installation
-
-Add this line to your application's Gemfile:
 
 ```ruby
 gem 'ec2_deployment_selector'
 ```
 
-And then execute:
+## Quick Start
 
-    $ bundle install
-
-Or install it yourself as:
-
-    $ gem install ec2_deployment_selector
-
-## Usage
-
-### Basic Setup
-
+### EC2 Instance Selection
 ```ruby
 require "ec2_deployment_selector"
 
-configure_ec2_selector = ->(env) do
-  ec2_deployment_selector = Ec2DeploymentSelector::Selector.new(
-    access_key_id: ENV["ACCESS_KEY_ID"],
-    secret_access_key: ENV["SECRET_ACCESS_KEY"],
-    application_name: fetch(:application),
-    filters: { "ENV_Type" => env }
-  )
+selector = Ec2DeploymentSelector::Selector.new(
+  access_key_id: ENV["ACCESS_KEY_ID"],
+  secret_access_key: ENV["SECRET_ACCESS_KEY"],
+  application_name: "my-app",
+  filters: { "ENV_Type" => "production" }
+)
 
-  ec2_deployment_selector.render_all_instances
-
-  if ENV["NON_INTERACTIVE"] == "true"
-    if ENV["TARGET_IPS"] && !ENV["TARGET_IPS"].empty?
-      target_ips = ENV["TARGET_IPS"].split(",").map(&:strip)
-      all_instances = ec2_deployment_selector.instances || []
-      ip_matching_instances = all_instances.select { |instance|
-        target_ips.include?(instance.public_ip_address) || target_ips.include?(instance.private_ip_address)
-      }
-      selected_instances = ip_matching_instances.select(&:deployable?)
-      ec2_deployment_selector.selected_instances = selected_instances
-    else
-      deployable_instances = ec2_deployment_selector.instances.select(&:deployable?)
-      ec2_deployment_selector.selected_instances = deployable_instances
-    end
-  else
-    ec2_deployment_selector.prompt_select_instances
-    ec2_deployment_selector.confirm_selected_instances
-  end
-
-  ec2_deployment_selector.selected_instances.each do |instance|
-    server instance.public_ip_address, user: "deploy", roles: %w{app}
-  end
-end
-
-configure_ec2_selector.call('production') if fetch(:stage) == :production
-configure_ec2_selector.call('staging') if fetch(:stage) == :staging
+selector.render_all_instances
+selector.prompt_select_instances
 ```
 
-### Target IP Filtering
+### Slack Notifications
+```ruby
+# In your config/deploy.rb
+require "ec2_deployment_selector"
 
-Deploy to specific instances by IP:
+# Hook into deployment lifecycle (you control when to notify)
+after 'deploy:finished', 'ec2_deployment_selector:slack:notify'
+```
+
+Set environment variable:
+```bash
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+```
+
+## Documentation
+
+- **[Slack Notifier Usage](SLACK_NOTIFIER_USAGE.md)**: Complete notification setup guide
+
+## Capistrano Integration
+
+Add the gem to your Gemfile and require it in your `config/deploy.rb`:
+
+```ruby
+require 'ec2_deployment_selector'
+```
+
+See [examples/capistrano_deploy.rb](examples/capistrano_deploy.rb) for complete setup examples.
+
+### Environment Variables
+
+#### Required
+- `ACCESS_KEY_ID` / `AWS_ACCESS_KEY_ID` - AWS access key
+- `SECRET_ACCESS_KEY` / `AWS_SECRET_ACCESS_KEY` - AWS secret key
+
+#### Optional
+- `NON_INTERACTIVE=true` - Skip interactive prompts
+- `TARGET_IPS=ip1,ip2` - Deploy to specific IPs only
+- `SLACK_WEBHOOK_URL` - Enable Slack notifications
+
+### Available Tasks
 
 ```bash
-NON_INTERACTIVE=true TARGET_IPS="123.123.123.123,192.168.123.123" bundle exec cap staging deploy
+# Slack notifications
+cap production ec2_deployment_selector:slack:notify
+
+# Manual task invocation
+invoke 'ec2_deployment_selector:slack:notify'
 ```
 
 ### Non-Interactive Mode
 
-For CI/CD pipelines:
-
+For CI/CD pipelines, auto-select all deployable instances:
 ```bash
 NON_INTERACTIVE=true bundle exec cap production deploy
+```
+
+Deploy to specific instances by IP:
+```bash
+NON_INTERACTIVE=true TARGET_IPS="123.123.123.123,192.168.123.123" bundle exec cap staging deploy
 ```
 
 ## Instance Deployability
@@ -95,10 +102,17 @@ After checking out the repo, run `bin/setup` to install dependencies. You can al
 
 To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and tags, and push the `.gem` file to [rubygems.org](https://rubygems.org).
 
+### Testing
+
+Run the test suite with:
+
+```bash
+bundle exec rspec
+```
+
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/ec2_deployment_selector.
-
 
 ## License
 
